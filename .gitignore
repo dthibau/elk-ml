@@ -1,0 +1,6 @@
+*.odt
+*.odp
+*.class
+*#
+**/emails-recus/
+**/apache2.zip
