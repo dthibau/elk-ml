@@ -1,0 +1,362 @@
+#################
+# Job Partitionnés
+#################
+DELETE _ml/datafeeds/datafeed-apache_bytes_by_country
+DELETE _ml/anomaly_detectors/apache_bytes_by_country
+DELETE _ml/datafeeds/datafeed-apache_bytes_partition_country
+DELETE _ml/anomaly_detectors/apache_bytes_partition_country
+
+PUT _ml/anomaly_detectors/apache_bytes_by_country
+{
+  "description": "Sum bytes by_field_name country",
+  "analysis_config": {
+    "bucket_span": "1d",
+    "detectors": [
+      {
+        "detector_description": "Sum bytes by_field_name country",
+        "function": "sum",
+        "field_name": "bytes",
+        "by_field_name": "pays"
+      }
+    ]
+  },
+  "data_description": {
+    "time_field": "@timestamp",
+    "time_format": "epoch_ms"
+  },
+  "analysis_limits": {
+    "model_memory_limit": "11MB"
+  },
+  "model_plot_config": {
+    "enabled": true,
+    "annotations_enabled": true
+  },
+  "results_index_name": "by_field_name",
+  "datafeed_config":
+  {
+    "indices": [
+    "logstash-apache*"
+    ],
+    "query": {
+      "bool": {
+        "must": [
+          {
+            "match_all": {}
+          }
+        ]
+      }
+    },
+    "runtime_mappings": {
+      "hour_of_day": {
+        "type": "long",
+        "script": {
+          "source": "emit(doc['timestamp'].value.getHour());"
+        }
+      }
+    },
+    "datafeed_id": "datafeed-apache_bytes_by_country"
+  }
+}
+
+POST _ml/anomaly_detectors/apache_bytes_by_country/_open
+POST _ml/datafeeds/apache_bytes_by_country/_start
+
+
+PUT _ml/anomaly_detectors/apache_bytes_partition_country
+{
+  "description": "Sum bytes partition_name country",
+  "analysis_config": {
+    "bucket_span": "1d",
+    "detectors": [
+      {
+        "detector_description": "Sum bytes by_field_name country",
+        "function": "sum",
+        "field_name": "bytes",
+        "partition_field_name": "pays"
+      }
+    ]
+  },
+  "data_description": {
+    "time_field": "@timestamp",
+    "time_format": "epoch_ms"
+  },
+  "analysis_limits": {
+    "model_memory_limit": "11MB"
+  },
+  "model_plot_config": {
+    "enabled": true,
+    "annotations_enabled": true
+  },
+  "results_index_name": "by_field_name",
+  "datafeed_config":
+  {
+    "indices": [
+    "logstash-apache*"
+    ],
+    "query": {
+      "bool": {
+        "must": [
+          {
+            "match_all": {}
+          }
+        ]
+      }
+    },
+    "runtime_mappings": {
+      "hour_of_day": {
+        "type": "long",
+        "script": {
+          "source": "emit(doc['timestamp'].value.getHour());"
+        }
+      }
+    },
+    "datafeed_id": "datafeed-apache_bytes_partition_country"
+  }
+}
+
+POST _ml/anomaly_detectors/apache_bytes_partition_country/_open
+POST _ml/datafeeds/datafeed-apache_bytes_partition_country/_start
+
+## Multi détecteurs ###
+PUT _ml/anomaly_detectors/spring-cat-multi
+{
+ "datafeed_config": {
+    "datafeed_id": "datafeed-spring-cat-multi",
+    "query": {
+      "bool": {
+        "must_not": [
+          {
+            "wildcard": {
+              "thread": "*scheduling*"
+            }
+          }
+        ]
+      }
+    },
+    "indices": [
+      "*springboot*"
+    ]
+  },
+  "groups": [
+    "formation",
+    "spring"
+  ],
+  "description": "",
+  "analysis_config": {
+    "bucket_span": "1h",
+    "categorization_field_name": "message",
+    "categorization_analyzer": {
+      "char_filter": [
+        "first_line_with_letters"
+      ],
+      "tokenizer": "ml_standard",
+      "filter": [
+        {
+          "type": "stop",
+          "stopwords": [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri",
+            "Sat",
+            "Sun",
+            "January",
+            "February",
+            "March",
+            "April",
+            "May",
+            "June",
+            "July",
+            "August",
+            "September",
+            "October",
+            "November",
+            "December",
+            "Jan",
+            "Feb",
+            "Mar",
+            "Apr",
+            "May",
+            "Jun",
+            "Jul",
+            "Aug",
+            "Sep",
+            "Oct",
+            "Nov",
+            "Dec",
+            "GMT",
+            "UTC"
+          ]
+        },
+        {
+          "type": "limit",
+          "max_token_count": "100"
+        }
+      ]
+    },
+    "per_partition_categorization": {
+      "enabled": false
+    },
+    "detectors": [
+      {
+        "detector_description": "rare by mlcategory",
+        "function": "rare",
+        "by_field_name": "mlcategory"
+      },
+      {
+        "detector_description": "high_count by mlcategory",
+        "function": "high_count",
+        "by_field_name": "mlcategory"
+      }
+    ],
+    "influencers": [
+      "mlcategory"
+    ],
+    "model_prune_window": "30d"
+  },
+  "analysis_limits": {
+    "model_memory_limit": "51mb",
+    "categorization_examples_limit": 4
+  },
+  "data_description": {
+    "time_field": "@timestamp",
+    "time_format": "epoch_ms"
+  },
+  "model_plot_config": {
+    "enabled": true,
+    "annotations_enabled": true
+  }
+}
+
+
+### Mise à jour avec custom rules :
+POST _ml/anomaly_detectors/spring-cat-multi/_update
+{
+  "detectors": [
+    {
+      "detector_index": 0,
+      "custom_rules": [
+        {
+          "actions": [
+            "skip_result",
+            "skip_model_update"
+          ],
+          "scope": {
+            "mlcategory": {
+              "filter_id": "offshore",
+              "filter_type": "exclude"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "detector_index": 1,
+      "custom_rules": [
+        {
+          "actions": [
+            "skip_result",
+            "skip_model_update"
+          ],
+          "scope": {
+            "mlcategory": {
+              "filter_id": "offshore",
+              "filter_type": "exclude"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
+
+##########
+# Job Géo
+##########
+DELETE _ml/anomaly_detectors/geoloc
+
+PUT _ml/anomaly_detectors/geoloc
+{
+  "description" : "Anomalies géo",
+  "analysis_config" : {
+    "bucket_span":"10m",
+    "detectors": [
+      {
+        "detector_description": "rare by \"geoip.country_name.keyword\"",
+        "function": "rare",
+        "by_field_name": "geoip.country_name.keyword"
+      }, 
+      {
+        "detector_description": "Anomalies lat/lon",
+        "function": "lat_long",
+        "field_name": "lat-lon",
+        "over_field_name": "geoip.ip"
+      }
+    ],
+    "influencers": ["agent","verb"]
+  },
+  "data_description" : {
+    "time_field":"@timestamp",
+    "time_format": "epoch_ms"
+  }
+}
+
+
+DELETE _ml/datafeeds/datafeed-geoloc
+
+PUT _ml/datafeeds/datafeed-geoloc
+{
+  "job_id": "geoloc",
+  "indices": ["logstash-apache"],
+  "query": {
+    "match": {
+          "verb": "GET POST"
+    }
+  },
+  "script_fields": {
+    "lat-lon": {
+      "script": {
+        "source": "doc['geoip.latitude'].value + ',' + doc['geoip.longitude'].value",
+        "lang": "painless"
+      }
+    }
+  }
+}
+#########
+Filtres et règles
+################
+PUT _ml/filters/paradis
+{
+  "description": "Our list of safe domains",
+  "items": ["Monaco", "Lichtenstein","Panama"]
+}
+
+POST _ml/anomaly_detectors/geoloc/_update
+{
+"detectors": [
+      {
+        "custom_rules": [
+          {
+            "actions": [
+              "skip_result"
+            ],
+            "scope": {
+              "geoip.country_name.keyword": {
+                "filter_id": "paradis",
+                "filter_type": "exclude"
+              }
+            }
+          }
+        ],
+        "detector_index": 0
+      }
+    ]
+}
